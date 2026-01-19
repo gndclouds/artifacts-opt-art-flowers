@@ -892,9 +892,11 @@
   position: relative;
   width: 100%;
   overflow: hidden;
+  min-height: 40px;
   height: 40px;
-  display: block;
-  visibility: visible;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .exportBtn {

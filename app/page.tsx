@@ -449,6 +449,7 @@ export default function Home() {
   const lastFlowerTimeRef = useRef(0)
   const animationIdRef = useRef<number>()
   const initialMousePosRef = useRef<{ x: number; y: number } | null>(null)
+  const lastFlowerPosRef = useRef<{ x: number; y: number } | null>(null) // Track last flower position for brush mode
   const isPaintingModeRef = useRef(false) // true = dragging/painting, false = holding/growing
   
   // Settings state
@@ -457,7 +458,7 @@ export default function Home() {
     petalCount: 6,
     baseRadius: 50,
     selectedPalette: '90sPastels' as keyof typeof colorPalettes,
-    bloomSpeed: 0.01,
+    bloomSpeed: 0.025,
     rotationSpeed: 0.01,
     opacity: 0.8,
     layerCount: 4,
@@ -559,9 +560,11 @@ export default function Home() {
     window.addEventListener('resize', resizeCanvas)
 
     // Function to create a flower at a specific position
-    const createFlower = (x: number, y: number) => {
-      // Deactivate all previous flowers
-      flowersRef.current.forEach(flower => flower.deactivate())
+    const createFlower = (x: number, y: number, keepPreviousActive: boolean = false) => {
+      // Only deactivate previous flowers if not in brush mode
+      if (!keepPreviousActive) {
+        flowersRef.current.forEach(flower => flower.deactivate())
+      }
       
       const flower = new Flower(x, y, {
         baseRadius: settings.baseRadius + (Math.random() - 0.5) * settings.baseRadius * 0.2,
@@ -582,16 +585,23 @@ export default function Home() {
     // Get mouse position relative to canvas
     const getMousePos = (e: MouseEvent | TouchEvent) => {
       const rect = canvas.getBoundingClientRect()
+      // Calculate scale factor between canvas internal size and display size
+      const scaleX = canvas.width / rect.width
+      const scaleY = canvas.height / rect.height
+      
+      let clientX: number, clientY: number
       if ('touches' in e) {
-        return {
-          x: e.touches[0].clientX - rect.left,
-          y: e.touches[0].clientY - rect.top
-        }
+        clientX = e.touches[0].clientX
+        clientY = e.touches[0].clientY
       } else {
-        return {
-          x: (e as MouseEvent).clientX - rect.left,
-          y: (e as MouseEvent).clientY - rect.top
-        }
+        clientX = (e as MouseEvent).clientX
+        clientY = (e as MouseEvent).clientY
+      }
+      
+      // Convert to canvas coordinates, accounting for scaling
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
       }
     }
 
@@ -602,33 +612,42 @@ export default function Home() {
       isPaintingModeRef.current = false // Start in "growing" mode
       const pos = getMousePos(e)
       initialMousePosRef.current = { x: pos.x, y: pos.y }
+      lastFlowerPosRef.current = { x: pos.x, y: pos.y } // Initialize last flower position
       createFlower(pos.x, pos.y)
     }
 
     // Mouse move handler (for painting while dragging)
     const handleMouseMove = (e: MouseEvent | TouchEvent) => {
-      if (!isMouseDownRef.current || !initialMousePosRef.current) return
+      if (!isMouseDownRef.current || !initialMousePosRef.current || !lastFlowerPosRef.current) return
       
       e.preventDefault()
       const pos = getMousePos(e)
       
-      // Check if mouse has moved significantly (more than 5 pixels)
+      // Check if mouse has moved from initial position
       const dx = pos.x - initialMousePosRef.current.x
       const dy = pos.y - initialMousePosRef.current.y
-      const distance = Math.sqrt(dx * dx + dy * dy)
+      const distanceFromStart = Math.sqrt(dx * dx + dy * dy)
       
-      // If moved more than 5 pixels, switch to painting mode
-      if (distance > 5) {
+      // Switch to painting mode (brush mode) on any movement
+      if (distanceFromStart > 1) {
         isPaintingModeRef.current = true
-      }
-      
-      // Only create new flowers if in painting mode (dragging)
-      if (isPaintingModeRef.current) {
-        const now = Date.now()
-        // Throttle flower creation to avoid too many flowers
-        if (now - lastFlowerTimeRef.current > 50) {
-          createFlower(pos.x, pos.y)
-          lastFlowerTimeRef.current = now
+        
+        // Check distance from last flower position
+        const dxFromLast = pos.x - lastFlowerPosRef.current.x
+        const dyFromLast = pos.y - lastFlowerPosRef.current.y
+        const distanceFromLast = Math.sqrt(dxFromLast * dxFromLast + dyFromLast * dyFromLast)
+        
+        // Create a new flower if we've moved at least 8 pixels from the last flower
+        // Lower threshold makes it feel more connected and responsive
+        if (distanceFromLast >= 8) {
+          const now = Date.now()
+          // Throttle by time (30ms) for smoother, more responsive feel
+          if (now - lastFlowerTimeRef.current > 30) {
+            // In brush mode, keep all flowers active so they all continue growing
+            createFlower(pos.x, pos.y, true)
+            lastFlowerPosRef.current = { x: pos.x, y: pos.y } // Update last flower position
+            lastFlowerTimeRef.current = now
+          }
         }
       }
       // If not in painting mode (holding), the existing flower will continue growing
@@ -640,6 +659,7 @@ export default function Home() {
       isMouseDownRef.current = false
       isPaintingModeRef.current = false
       initialMousePosRef.current = null
+      lastFlowerPosRef.current = null
     }
 
     // Mouse leave handler (stop painting when mouse leaves canvas)
@@ -647,6 +667,7 @@ export default function Home() {
       isMouseDownRef.current = false
       isPaintingModeRef.current = false
       initialMousePosRef.current = null
+      lastFlowerPosRef.current = null
     }
 
     // Global mouse up handler (catches mouse release outside canvas)
@@ -654,6 +675,7 @@ export default function Home() {
       isMouseDownRef.current = false
       isPaintingModeRef.current = false
       initialMousePosRef.current = null
+      lastFlowerPosRef.current = null
     }
 
     // Add event listeners to canvas
@@ -796,7 +818,8 @@ export default function Home() {
         workers: 2,
         quality: 10,
         width: canvas.width,
-        height: canvas.height
+        height: canvas.height,
+        workerScript: '/gif.worker.js'
       })
       
       // Add current frame

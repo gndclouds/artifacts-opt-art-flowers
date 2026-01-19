@@ -87,7 +87,7 @@ A beautiful, glassmorphic toolbar that adapts to your color palette. It's organi
 - **Scale** (0.5-5x): Make 'em big or small
 
 ### 2. **Color Controls** 🎨
-- **Color Palettes**: 7 pre-made palettes + custom
+- **Color Palettes**: 6 pre-made palettes
   - '90s Pastels (because nostalgia)
   - Y2K (because Y2K is back)
   - Oh Snap (because why not)
@@ -95,7 +95,6 @@ A beautiful, glassmorphic toolbar that adapts to your color palette. It's organi
   - Electric (neon vibes)
   - Black & White (classic)
   - Dot Gradient (special pattern mode)
-  - Custom (your colors, your rules)
 - **Opacity** (0.1-1.0): How see-through they are
 
 ### 3. **Animation Controls** 🎬
@@ -215,11 +214,6 @@ A special rendering mode that creates a radial dot pattern:
 - Previous flowers stop growing when new one is created
 - All flowers continue rotating (because motion is life)
 
-### Custom Color Modal
-- Beautiful modal overlay
-- 4 custom color pickers
-- Saves to palette automatically
-- Glassmorphic design matching toolbar
 
 ---
 

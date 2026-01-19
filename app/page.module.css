@@ -863,6 +863,7 @@
   display: flex;
   gap: 8px;
   width: 100%;
+  margin-top: 0;
 }
 
 .clearBtn.confirmBtn {
@@ -886,10 +887,14 @@
 }
 
 .exportButtonContainer {
-  margin: 8px 0 0 0;
-  padding: 0 0 8px 0;
+  margin: 8px 0 8px 0;
+  padding: 0;
   position: relative;
   width: 100%;
+  overflow: hidden;
+  height: 40px;
+  display: block;
+  visibility: visible;
 }
 
 .exportBtn {
@@ -904,7 +909,7 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
   box-shadow: 
     0 2px 4px rgba(59, 130, 246, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
@@ -913,7 +918,16 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  width: 100%;
+  position: absolute;
+  top: 0;
+  height: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.exportBtn svg {
+  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  flex-shrink: 0;
 }
 
 .exportBtn:hover {
@@ -933,26 +947,97 @@
 }
 
 .exportButtonsSplit {
-  display: flex;
-  gap: 8px;
-  animation: splitIn 0.2s ease;
+  position: relative;
   width: 100%;
+  height: 100%;
 }
 
-.exportButtonsSplit .exportBtn {
-  flex: 1;
-  margin: 0;
+.exportButtonsSplit .exportBtn:first-child {
+  left: 0;
+  width: 100%;
+  transform-origin: left center;
+  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 2;
 }
 
-@keyframes splitIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+.exportButtonsSplit .exportBtn:last-child {
+  right: 0;
+  width: 0;
+  transform-origin: right center;
+  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  opacity: 0;
+  pointer-events: none;
+  padding-left: 0;
+  padding-right: 0;
+  border-left: none;
+  z-index: 1;
+}
+
+/* Split state - mitosis effect */
+.exportButtonsSplit.split .exportBtn:first-child {
+  width: calc(50% - 4px);
+  transform: translateX(0) scale(1);
+  border-radius: 10px;
+}
+
+.exportButtonsSplit.split .exportBtn:last-child {
+  width: calc(50% - 4px);
+  opacity: 1;
+  pointer-events: auto;
+  padding-left: 16px;
+  padding-right: 16px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  transform: translateX(0) scale(1);
+  border-radius: 10px;
+}
+
+/* Unified state - single button */
+.exportButtonsSplit:not(.split) .exportBtn:first-child {
+  width: 100%;
+  transform: translateX(0) scale(1);
+  border-radius: 10px;
+}
+
+.exportButtonsSplit:not(.split) .exportBtn:last-child {
+  width: 0;
+  opacity: 0;
+  transform: translateX(0) scale(0.98);
+  border-radius: 10px;
+}
+
+/* Label transitions */
+.exportLabel {
+  display: inline-block;
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.15s, 
+              transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.15s,
+              width 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.15s;
+  opacity: 0;
+  transform: scale(0.85);
+  width: 0;
+  overflow: hidden;
+}
+
+.exportLabelUnified {
+  display: inline-block;
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              transform 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 1;
+  transform: scale(1);
+  width: auto;
+}
+
+.exportButtonsSplit.split .exportLabel {
+  opacity: 1;
+  transform: scale(1);
+  width: auto;
+}
+
+.exportButtonsSplit.split .exportLabelUnified {
+  opacity: 0;
+  transform: scale(0.85);
+  width: 0;
+  overflow: hidden;
 }
 
 .toolbarToggle {
@@ -1099,7 +1184,7 @@
     0 2px 8px rgba(0, 0, 0, 0.1),
     inset 0 1px 1px rgba(255, 255, 255, 0.6),
     inset 0 -1px 1px rgba(255, 255, 255, 0.2);
-  max-width: 500px;
+  max-width: 700px;
   width: 100%;
   max-height: 90vh;
   overflow: hidden;
@@ -1118,7 +1203,7 @@
 
 .modalHeader h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 600;
   color: rgba(26, 26, 26, 0.95);
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
@@ -1151,12 +1236,12 @@
 
 .modalDescription {
   margin: 0 0 24px 0;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
-  color: rgba(26, 26, 26, 0.85);
+  color: rgba(26, 26, 26, 0.9);
   text-align: center;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
-  line-height: 1.5;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
+  line-height: 1.6;
 }
 
 .customColorModalGrid {
@@ -1179,7 +1264,7 @@
 }
 
 .colorLabel {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: rgba(26, 26, 26, 0.95);
   text-transform: uppercase;
@@ -1238,6 +1323,241 @@
 .colorInputModal::-webkit-color-swatch {
   border: none;
   border-radius: 10px;
+}
+
+/* Custom Color Picker Styles */
+.colorPickerWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.colorPickerSwatch {
+  width: 100%;
+  height: 70px;
+  border: 2px solid var(--palette-tint-30, rgba(255, 255, 255, 0.4));
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 3px;
+  box-shadow: 
+    0 2px 6px rgba(0, 0, 0, 0.1),
+    inset 0 1px 2px rgba(0, 0, 0, 0.1),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.4);
+  position: relative;
+  overflow: hidden;
+  background: transparent;
+}
+
+.colorPickerSwatch::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 10px;
+  background: inherit;
+  z-index: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.1);
+}
+
+.colorPickerSwatch:hover {
+  border-color: var(--palette-tint-50, rgba(255, 255, 255, 0.6));
+  background: var(--palette-tint-25, rgba(255, 255, 255, 0.25));
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    inset 0 1px 2px rgba(0, 0, 0, 0.1),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+.colorPickerSwatch:active {
+  transform: translateY(0);
+}
+
+.colorPickerDropdown {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 0;
+  right: 0;
+  z-index: 1001;
+  background: var(--palette-tint-15, rgba(255, 255, 255, 0.25));
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border: 1px solid var(--palette-tint-30, rgba(255, 255, 255, 0.4));
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    0 2px 8px rgba(0, 0, 0, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.6),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.2);
+  animation: slideDown 0.2s ease;
+  /* Ensure it matches modal styling */
+  min-width: 320px;
+  /* Match modal text styling */
+  color: rgba(26, 26, 26, 0.95);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.colorPickerArea {
+  position: relative;
+  width: 100%;
+  height: 240px;
+  border-radius: 12px;
+  cursor: crosshair;
+  overflow: hidden;
+  margin-bottom: 20px;
+  border: 2px solid var(--palette-tint-30, rgba(255, 255, 255, 0.4));
+  box-shadow: 
+    inset 0 2px 4px rgba(0, 0, 0, 0.15),
+    0 2px 6px rgba(0, 0, 0, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  background: var(--palette-tint-10, rgba(255, 255, 255, 0.1));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.colorPickerGradient {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.colorPickerSelector {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 3px solid rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(0, 0, 0, 0.2),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.8);
+  z-index: 10;
+  transition: all 0.1s ease;
+}
+
+.colorPickerControls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.colorPickerBrightnessWrapper {
+  width: 100%;
+}
+
+.colorPickerBrightness {
+  position: relative;
+  width: 100%;
+  height: 36px;
+  border-radius: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  border: 2px solid var(--palette-tint-30, rgba(255, 255, 255, 0.4));
+  box-shadow: 
+    inset 0 2px 4px rgba(0, 0, 0, 0.15),
+    0 2px 6px rgba(0, 0, 0, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  background: var(--palette-tint-10, rgba(255, 255, 255, 0.1));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.colorPickerHueGradient {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.colorPickerBrightnessSelector {
+  position: absolute;
+  top: 50%;
+  width: 26px;
+  height: 26px;
+  border: 3px solid rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(0, 0, 0, 0.2),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.8);
+  z-index: 10;
+  transition: all 0.1s ease;
+}
+
+.colorPickerHexInput {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.colorPickerHexInput label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(26, 26, 26, 0.95);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.7);
+}
+
+.colorPickerHexInput input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid var(--palette-tint-30, rgba(255, 255, 255, 0.4));
+  border-radius: 10px;
+  background: var(--palette-tint-15, rgba(255, 255, 255, 0.15));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(26, 26, 26, 0.95);
+  font-size: 15px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  text-transform: uppercase;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    inset 0 1px 2px rgba(0, 0, 0, 0.1),
+    0 1px 3px rgba(0, 0, 0, 0.05),
+    inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4);
+}
+
+.colorPickerHexInput input:focus {
+  outline: none;
+  border-color: var(--palette-tint-50, rgba(255, 255, 255, 0.6));
+  background: var(--palette-tint-25, rgba(255, 255, 255, 0.25));
+  box-shadow: 
+    0 0 0 3px rgba(255, 255, 255, 0.25),
+    inset 0 1px 2px rgba(0, 0, 0, 0.1),
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+.colorPickerHexInput input::placeholder {
+  color: rgba(26, 26, 26, 0.4);
+  text-shadow: none;
+}
+
+.colorPickerHexInput input:hover {
+  border-color: var(--palette-tint-40, rgba(255, 255, 255, 0.5));
+  background: var(--palette-tint-20, rgba(255, 255, 255, 0.2));
+  box-shadow: 
+    inset 0 1px 2px rgba(0, 0, 0, 0.1),
+    0 2px 4px rgba(0, 0, 0, 0.08),
+    inset 0 1px 1px rgba(255, 255, 255, 0.35);
 }
 
 .modalFooter {
@@ -1313,5 +1633,14 @@
   
   .customColorModalGrid {
     grid-template-columns: 1fr;
+  }
+  
+  .colorPickerDropdown {
+    position: fixed;
+    left: 20px;
+    right: 20px;
+    max-width: calc(100vw - 40px);
+    top: auto;
+    bottom: auto;
   }
 }

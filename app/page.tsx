@@ -288,10 +288,6 @@ const colorPalettes = {
   electric: {
     name: 'Electric',
     colors: ['#fb0df1', '#05f7cd', '#aaf604', '#fbfc0b']
-  },
-  custom: {
-    name: 'Custom',
-    colors: []
   }
 }
 
@@ -378,20 +374,89 @@ function useDragAdjust(
   }
 }
 
+// Color conversion utilities (used by both Home and CustomColorPicker)
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  return '#' + [r, g, b].map(x => {
+    const hex = x.toString(16)
+    return hex.length === 1 ? '0' + hex : hex
+  }).join('')
+}
+
+function rgbToHsv(r: number, g: number, b: number): { h: number; s: number; v: number } {
+  r /= 255
+  g /= 255
+  b /= 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const diff = max - min
+  let h = 0
+  if (diff !== 0) {
+    if (max === r) {
+      h = ((g - b) / diff) % 6
+    } else if (max === g) {
+      h = (b - r) / diff + 2
+    } else {
+      h = (r - g) / diff + 4
+    }
+  }
+  h = Math.round(h * 60)
+  if (h < 0) h += 360
+  const s = max === 0 ? 0 : Math.round((diff / max) * 100)
+  const v = Math.round(max * 100)
+  return { h, s, v }
+}
+
+function hsvToRgb(h: number, s: number, v: number): { r: number; g: number; b: number } {
+  s /= 100
+  v /= 100
+  const c = v * s
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1))
+  const m = v - c
+  let r = 0, g = 0, b = 0
+  if (h >= 0 && h < 60) {
+    r = c; g = x; b = 0
+  } else if (h >= 60 && h < 120) {
+    r = x; g = c; b = 0
+  } else if (h >= 120 && h < 180) {
+    r = 0; g = c; b = x
+  } else if (h >= 180 && h < 240) {
+    r = 0; g = x; b = c
+  } else if (h >= 240 && h < 300) {
+    r = x; g = 0; b = c
+  } else if (h >= 300 && h < 360) {
+    r = c; g = 0; b = x
+  }
+  return {
+    r: Math.round((r + m) * 255),
+    g: Math.round((g + m) * 255),
+    b: Math.round((b + m) * 255)
+  }
+}
+
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const flowersRef = useRef<Flower[]>([])
   const isMouseDownRef = useRef(false)
   const lastFlowerTimeRef = useRef(0)
   const animationIdRef = useRef<number>()
+  const initialMousePosRef = useRef<{ x: number; y: number } | null>(null)
+  const isPaintingModeRef = useRef(false) // true = dragging/painting, false = holding/growing
   
   // Settings state
   const [settings, setSettings] = useState({
     waviness: 0.15,
     petalCount: 6,
     baseRadius: 50,
-    customColors: ['#4A90E2', '#FF6B6B', '#51CF66', '#FFD43B'], // 4 custom colors
-    selectedPalette: 'custom' as keyof typeof colorPalettes,
+    selectedPalette: '90sPastels' as keyof typeof colorPalettes,
     bloomSpeed: 0.01,
     rotationSpeed: 0.01,
     opacity: 0.8,
@@ -404,38 +469,17 @@ export default function Home() {
   })
   
   const activeFlowerRef = useRef<Flower | null>(null)
-  const [showCustomColorModal, setShowCustomColorModal] = useState(false)
   const [clearConfirming, setClearConfirming] = useState(false)
   const [exportHovered, setExportHovered] = useState(false)
   
   // Get a random color from the selected palette
   const getColorFromPalette = (): string => {
-    if (settings.selectedPalette === 'custom') {
-      return settings.customColors[Math.floor(Math.random() * settings.customColors.length)]
-    }
     const palette = colorPalettes[settings.selectedPalette]
     return palette.colors[Math.floor(Math.random() * palette.colors.length)]
   }
 
-  // Convert hex to RGB
-  const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-    return result ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16)
-    } : null
-  }
-
   // Calculate average color from palette for UI tinting
   const getPaletteTintColor = (): string => {
-    if (settings.selectedPalette === 'custom') {
-      // Return first custom color or default
-      return settings.customColors[0] || '#667eea'
-    }
-    if (settings.selectedPalette === 'dotGradient') {
-      return '#808080' // Gray for dot gradient
-    }
     const palette = colorPalettes[settings.selectedPalette]
     if (palette.colors.length === 0) return '#667eea' // Default fallback
     
@@ -497,7 +541,7 @@ export default function Home() {
       document.documentElement.style.setProperty('--palette-tint-40', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`)
       document.documentElement.style.setProperty('--palette-tint-50', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`)
     }
-  }, [settings.selectedPalette, settings.customColors])
+  }, [settings.selectedPalette])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -555,38 +599,61 @@ export default function Home() {
     const handleMouseDown = (e: MouseEvent | TouchEvent) => {
       e.preventDefault()
       isMouseDownRef.current = true
+      isPaintingModeRef.current = false // Start in "growing" mode
       const pos = getMousePos(e)
+      initialMousePosRef.current = { x: pos.x, y: pos.y }
       createFlower(pos.x, pos.y)
     }
 
     // Mouse move handler (for painting while dragging)
     const handleMouseMove = (e: MouseEvent | TouchEvent) => {
-      if (!isMouseDownRef.current) return
+      if (!isMouseDownRef.current || !initialMousePosRef.current) return
       
       e.preventDefault()
-      const now = Date.now()
-      // Throttle flower creation to avoid too many flowers
-      if (now - lastFlowerTimeRef.current > 50) {
-        const pos = getMousePos(e)
-        createFlower(pos.x, pos.y)
-        lastFlowerTimeRef.current = now
+      const pos = getMousePos(e)
+      
+      // Check if mouse has moved significantly (more than 5 pixels)
+      const dx = pos.x - initialMousePosRef.current.x
+      const dy = pos.y - initialMousePosRef.current.y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      
+      // If moved more than 5 pixels, switch to painting mode
+      if (distance > 5) {
+        isPaintingModeRef.current = true
       }
+      
+      // Only create new flowers if in painting mode (dragging)
+      if (isPaintingModeRef.current) {
+        const now = Date.now()
+        // Throttle flower creation to avoid too many flowers
+        if (now - lastFlowerTimeRef.current > 50) {
+          createFlower(pos.x, pos.y)
+          lastFlowerTimeRef.current = now
+        }
+      }
+      // If not in painting mode (holding), the existing flower will continue growing
     }
 
     // Mouse up handler
     const handleMouseUp = (e: MouseEvent | TouchEvent) => {
       e.preventDefault()
       isMouseDownRef.current = false
+      isPaintingModeRef.current = false
+      initialMousePosRef.current = null
     }
 
     // Mouse leave handler (stop painting when mouse leaves canvas)
     const handleMouseLeave = () => {
       isMouseDownRef.current = false
+      isPaintingModeRef.current = false
+      initialMousePosRef.current = null
     }
 
     // Global mouse up handler (catches mouse release outside canvas)
     const handleGlobalMouseUp = () => {
       isMouseDownRef.current = false
+      isPaintingModeRef.current = false
+      initialMousePosRef.current = null
     }
 
     // Add event listeners to canvas
@@ -722,6 +789,7 @@ export default function Home() {
     
     try {
       // Dynamically import gif.js (client-side only)
+      // @ts-ignore - gif.js doesn't have type definitions
       const GIF = (await import('gif.js/dist/gif.js')).default || (await import('gif.js')).default
       
       const gif = new GIF({
@@ -1085,59 +1153,43 @@ export default function Home() {
                         key={key}
                         className={`${styles.paletteButton} ${settings.selectedPalette === key ? styles.paletteButtonActive : ''}`}
                         onClick={() => {
-                          if (key === 'custom') {
-                            setShowCustomColorModal(true)
-                          } else {
-                            setSettings({...settings, selectedPalette: key as keyof typeof colorPalettes})
-                          }
+                          setSettings({...settings, selectedPalette: key as keyof typeof colorPalettes})
                         }}
                         title={palette.name}
                       >
-                        {key !== 'custom' ? (
-                          <div className={styles.paletteSwatches}>
-                            {palette.colors.map((color, idx) => {
-                              if (color === 'pattern') {
-                                // Render dot gradient pattern for dotGradient palette
-                                return (
-                                  <div
-                                    key={idx}
-                                    className={styles.paletteSwatch}
-                                    style={{
-                                      background: `
-                                        repeating-radial-gradient(circle at center,
-                                          #000 0px,
-                                          #000 2px,
-                                          #808080 3px,
-                                          #808080 4px,
-                                          #fff 5px,
-                                          #fff 6px
-                                        )
-                                      `,
-                                      backgroundSize: '12px 12px'
-                                    }}
-                                  />
-                                )
-                              }
+                        <div className={styles.paletteSwatches}>
+                          {palette.colors.map((color, idx) => {
+                            if (color === 'pattern') {
+                              // Render dot gradient pattern for dotGradient palette
                               return (
                                 <div
                                   key={idx}
                                   className={styles.paletteSwatch}
-                                  style={{ backgroundColor: color }}
+                                  style={{
+                                    background: `
+                                      repeating-radial-gradient(circle at center,
+                                        #000 0px,
+                                        #000 2px,
+                                        #808080 3px,
+                                        #808080 4px,
+                                        #fff 5px,
+                                        #fff 6px
+                                      )
+                                    `,
+                                    backgroundSize: '12px 12px'
+                                  }}
                                 />
                               )
-                            })}
-                          </div>
-                        ) : (
-                          <div className={styles.paletteSwatches}>
-                            {settings.customColors.map((color, idx) => (
+                            }
+                            return (
                               <div
                                 key={idx}
                                 className={styles.paletteSwatch}
                                 style={{ backgroundColor: color }}
                               />
-                            ))}
-                          </div>
-                        )}
+                            )
+                          })}
+                        </div>
                         <span className={styles.paletteName}>{palette.name}</span>
                       </button>
                     ))}
@@ -1265,51 +1317,52 @@ export default function Home() {
                   </button>
                 </div>
               </div>
-              {settings.animationEnabled && (
-                <div className={styles.controlGroup}>
-                  <div className={styles.toolRow}>
-                    <div className={styles.labelWithIcon}>
-                      <ArrowRightLeft size={14} />
-                      <span>spring-direction</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <button
-                        className={styles.iconToggle}
-                        onClick={() => setSettings({...settings, rotationDirection: 'left'})}
-                        aria-label="Spring left"
-                        style={{ 
-                          opacity: settings.rotationDirection === 'left' ? 1 : 0.5,
-                          background: settings.rotationDirection === 'left' ? 'var(--palette-tint-20, rgba(255, 255, 255, 0.2))' : 'transparent'
-                        }}
-                      >
-                        <ArrowLeft size={14} />
-                      </button>
-                      <button
-                        className={styles.iconToggle}
-                        onClick={() => setSettings({...settings, rotationDirection: 'right'})}
-                        aria-label="Spring right"
-                        style={{ 
-                          opacity: settings.rotationDirection === 'right' ? 1 : 0.5,
-                          background: settings.rotationDirection === 'right' ? 'var(--palette-tint-20, rgba(255, 255, 255, 0.2))' : 'transparent'
-                        }}
-                      >
-                        <ArrowRight size={14} />
-                      </button>
-                      <button
-                        className={styles.iconToggle}
-                        onClick={() => setSettings({...settings, rotationDirection: 'random'})}
-                        aria-label="Random direction"
-                        style={{ 
-                          opacity: settings.rotationDirection === 'random' ? 1 : 0.5,
-                          background: settings.rotationDirection === 'random' ? 'var(--palette-tint-20, rgba(255, 255, 255, 0.2))' : 'transparent'
-                        }}
-                      >
-                        <Shuffle size={14} />
-                      </button>
-                    </div>
+              <div className={styles.controlGroup} style={{ opacity: settings.animationEnabled ? 1 : 0.5, pointerEvents: settings.animationEnabled ? 'auto' : 'none' }}>
+                <div className={styles.toolRow}>
+                  <div className={styles.labelWithIcon}>
+                    <ArrowRightLeft size={14} />
+                    <span>spring-direction</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                      className={styles.iconToggle}
+                      onClick={() => settings.animationEnabled && setSettings({...settings, rotationDirection: 'left'})}
+                      aria-label="Spring left"
+                      disabled={!settings.animationEnabled}
+                      style={{ 
+                        opacity: settings.rotationDirection === 'left' ? 1 : 0.5,
+                        background: settings.rotationDirection === 'left' ? 'var(--palette-tint-20, rgba(255, 255, 255, 0.2))' : 'transparent'
+                      }}
+                    >
+                      <ArrowLeft size={14} />
+                    </button>
+                    <button
+                      className={styles.iconToggle}
+                      onClick={() => settings.animationEnabled && setSettings({...settings, rotationDirection: 'right'})}
+                      aria-label="Spring right"
+                      disabled={!settings.animationEnabled}
+                      style={{ 
+                        opacity: settings.rotationDirection === 'right' ? 1 : 0.5,
+                        background: settings.rotationDirection === 'right' ? 'var(--palette-tint-20, rgba(255, 255, 255, 0.2))' : 'transparent'
+                      }}
+                    >
+                      <ArrowRight size={14} />
+                    </button>
+                    <button
+                      className={styles.iconToggle}
+                      onClick={() => settings.animationEnabled && setSettings({...settings, rotationDirection: 'random'})}
+                      aria-label="Random direction"
+                      disabled={!settings.animationEnabled}
+                      style={{ 
+                        opacity: settings.rotationDirection === 'random' ? 1 : 0.5,
+                        background: settings.rotationDirection === 'random' ? 'var(--palette-tint-20, rgba(255, 255, 255, 0.2))' : 'transparent'
+                      }}
+                    >
+                      <Shuffle size={14} />
+                    </button>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
 
             <div 
@@ -1317,29 +1370,23 @@ export default function Home() {
               onMouseEnter={() => setExportHovered(true)}
               onMouseLeave={() => setExportHovered(false)}
             >
-              {exportHovered ? (
-                <div className={styles.exportButtonsSplit}>
-                  <button 
-                    className={styles.exportBtn}
-                    onClick={exportAsPNG}
-                  >
-                    <Download size={14} />
-                    <span>PNG</span>
-                  </button>
-                  <button 
-                    className={styles.exportBtn}
-                    onClick={exportAsGIF}
-                  >
-                    <Download size={14} />
-                    <span>GIF</span>
-                  </button>
-                </div>
-              ) : (
-                <button className={styles.exportBtn}>
+              <div className={`${styles.exportButtonsSplit} ${exportHovered ? styles.split : ''}`}>
+                <button 
+                  className={styles.exportBtn}
+                  onClick={exportAsPNG}
+                >
                   <Download size={14} />
-                  <span>Export</span>
+                  <span className={styles.exportLabel}>PNG</span>
+                  <span className={styles.exportLabelUnified}>Export</span>
                 </button>
-              )}
+                <button 
+                  className={styles.exportBtn}
+                  onClick={exportAsGIF}
+                >
+                  <Download size={14} />
+                  <span className={styles.exportLabel}>GIF</span>
+                </button>
+              </div>
             </div>
 
             {clearConfirming ? (
@@ -1371,53 +1418,6 @@ export default function Home() {
         >
           <Palette size={18} />
         </button>
-      )}
-      
-      {showCustomColorModal && (
-        <div className={styles.modalOverlay} onClick={() => setShowCustomColorModal(false)}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h3>Custom Color Palette</h3>
-              <button 
-                className={styles.modalCloseBtn}
-                onClick={() => setShowCustomColorModal(false)}
-                aria-label="Close modal"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className={styles.modalBody}>
-              <p className={styles.modalDescription}>Choose 4 colors for your custom palette</p>
-              <div className={styles.customColorModalGrid}>
-                {settings.customColors.map((color, idx) => (
-                  <div key={idx} className={styles.customColorModalItem}>
-                    <label>
-                      <span className={styles.colorLabel}>Color {idx + 1}</span>
-                      <input
-                        type="color"
-                        value={color}
-                        onChange={(e) => {
-                          const newColors = [...settings.customColors]
-                          newColors[idx] = e.target.value
-                          setSettings({...settings, customColors: newColors, selectedPalette: 'custom'})
-                        }}
-                        className={styles.colorInputModal}
-                      />
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className={styles.modalFooter}>
-              <button 
-                className={styles.modalDoneBtn}
-                onClick={() => setShowCustomColorModal(false)}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </main>
   )

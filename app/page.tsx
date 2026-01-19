@@ -20,7 +20,8 @@ import {
   CheckSquare,
   Square,
   Pause,
-  Download
+  Download,
+  Loader2
 } from 'lucide-react'
 import styles from './page.module.css'
 
@@ -472,6 +473,7 @@ export default function Home() {
   const activeFlowerRef = useRef<Flower | null>(null)
   const [clearConfirming, setClearConfirming] = useState(false)
   const [exportHovered, setExportHovered] = useState(false)
+  const [isExportingGIF, setIsExportingGIF] = useState(false)
   
   // Get a random color from the selected palette
   const getColorFromPalette = (): string => {
@@ -809,6 +811,14 @@ export default function Home() {
     const canvas = canvasRef.current
     if (!canvas) return
     
+    // If no flowers, just export a static frame
+    if (flowersRef.current.length === 0) {
+      exportAsPNG()
+      return
+    }
+    
+    setIsExportingGIF(true)
+    
     try {
       // Dynamically import gif.js (client-side only)
       // @ts-ignore - gif.js doesn't have type definitions
@@ -819,29 +829,120 @@ export default function Home() {
         quality: 10,
         width: canvas.width,
         height: canvas.height,
-        workerScript: '/gif.worker.js'
+        workerScript: '/gif.worker.js',
+        repeat: 0 // Loop forever
       })
       
-      // Add current frame
       const ctx = canvas.getContext('2d')
-      if (ctx) {
-        gif.addFrame(ctx, { copy: true, delay: 100 })
+      if (!ctx) {
+        setIsExportingGIF(false)
+        return
       }
       
-      gif.on('finished', (blob: Blob) => {
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `flower-art-${Date.now()}.gif`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(url)
-      })
+      // Store original rotation values
+      const originalRotations = flowersRef.current.map(flower => flower.rotation)
       
-      gif.render()
+      // Calculate frames needed for a smooth loop
+      // Find the slowest rotation speed to ensure all flowers complete at least one rotation
+      const rotationSpeeds = flowersRef.current.map(f => Math.abs(f.rotationSpeed))
+      const slowestSpeed = Math.min(...rotationSpeeds) || settings.rotationSpeed || 0.01
+      
+      // Use a fixed number of frames for smooth animation (30-60 frames)
+      // This ensures the GIF loops smoothly regardless of rotation speed
+      const totalFrames = 40 // Fixed frame count for consistent loop timing
+      const framesPerSecond = 15 // Playback speed (adjust for file size vs smoothness)
+      const frameDelay = Math.round(1000 / framesPerSecond) // Delay in milliseconds
+      
+      // Calculate rotation increment per frame for a full loop
+      const rotationIncrement = (Math.PI * 2) / totalFrames
+      
+      // Capture frames
+      const captureFrame = (frameIndex: number) => {
+        // Clear and redraw canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        
+        // Draw background gradient
+        const tintColor = getPaletteTintColor()
+        let rgb: { r: number; g: number; b: number } | null = null
+        
+        if (tintColor.startsWith('#')) {
+          rgb = hexToRgb(tintColor)
+        } else if (tintColor.startsWith('rgb')) {
+          const match = tintColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/)
+          if (match) {
+            rgb = {
+              r: parseInt(match[1]),
+              g: parseInt(match[2]),
+              b: parseInt(match[3])
+            }
+          }
+        }
+        
+        if (rgb) {
+          const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height)
+          bgGradient.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)`)
+          const shiftedR = Math.min(255, Math.max(0, rgb.r + 20))
+          const shiftedG = Math.min(255, Math.max(0, rgb.g - 10))
+          const shiftedB = Math.min(255, Math.max(0, rgb.b + 30))
+          bgGradient.addColorStop(1, `rgba(${shiftedR}, ${shiftedG}, ${shiftedB}, 0.1)`)
+          ctx.fillStyle = bgGradient
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
+        } else {
+          const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height)
+          bgGradient.addColorStop(0, 'rgba(102, 126, 234, 0.1)')
+          bgGradient.addColorStop(1, 'rgba(118, 75, 162, 0.1)')
+          ctx.fillStyle = bgGradient
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
+        }
+        
+        // Update and draw all flowers
+        flowersRef.current.forEach((flower, index) => {
+          // Rotate each flower by the increment, respecting its direction
+          // This ensures all flowers complete a full rotation in the same number of frames
+          flower.rotation = originalRotations[index] + (frameIndex * rotationIncrement * flower.rotationDirection)
+          flower.draw(ctx)
+        })
+        
+        // Add frame to GIF
+        gif.addFrame(ctx, { copy: true, delay: frameDelay })
+        
+        // Continue to next frame or finish
+        if (frameIndex < totalFrames - 1) {
+          requestAnimationFrame(() => captureFrame(frameIndex + 1))
+        } else {
+          // Restore original rotations
+          flowersRef.current.forEach((flower, index) => {
+            flower.rotation = originalRotations[index]
+          })
+          
+          // Render the GIF
+          gif.on('finished', (blob: Blob) => {
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = `flower-art-${Date.now()}.gif`
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(url)
+            setIsExportingGIF(false)
+          })
+          
+          gif.on('error', (error: Error) => {
+            console.error('GIF rendering error:', error)
+            setIsExportingGIF(false)
+            exportAsPNG()
+          })
+          
+          gif.render()
+        }
+      }
+      
+      // Start capturing frames
+      captureFrame(0)
     } catch (error) {
       console.error('Error exporting GIF:', error)
+      setIsExportingGIF(false)
       // Fallback to PNG if GIF export fails
       exportAsPNG()
     }
@@ -1405,9 +1506,16 @@ export default function Home() {
                 <button 
                   className={styles.exportBtn}
                   onClick={exportAsGIF}
+                  disabled={isExportingGIF}
                 >
-                  <Download size={14} />
-                  <span className={styles.exportLabel}>GIF</span>
+                  {isExportingGIF ? (
+                    <Loader2 size={14} className={styles.loadingSpinner} />
+                  ) : (
+                    <Download size={14} />
+                  )}
+                  <span className={styles.exportLabel}>
+                    {isExportingGIF ? 'Exporting...' : 'GIF'}
+                  </span>
                 </button>
               </div>
             </div>

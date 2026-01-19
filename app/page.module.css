@@ -948,6 +948,30 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
+.exportBtn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.exportBtn:disabled:hover {
+  transform: none;
+  background: rgba(59, 130, 246, 0.7);
+}
+
+.loadingSpinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .exportButtonsSplit {
   position: relative;
   width: 100%;
